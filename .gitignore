@@ -38,6 +38,8 @@ data/
 chroma_db/
 nohup.out
 modelscope/
+.autodl/
+.ipynb_checkpoints/
 
 # System
 .DS_Store

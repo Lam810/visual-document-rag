@@ -55,7 +55,7 @@ python app.py
 
 ## 开发者
 
-- 林泽腾 (香港科技大学)
+- Lam Tzar Tung
 
 ## 许可证
 
