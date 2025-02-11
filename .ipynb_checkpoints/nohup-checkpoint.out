@@ -1,0 +1,42 @@
+2025-02-11 04:27:35,774 - modelscope - WARNING - Model revision not specified, use revision: v1.1.0
+2025-02-11 04:27:36,514 - modelscope - WARNING - Model revision not specified, use revision: v1.1.0
+2025-02-11 04:27:36,741 - modelscope - INFO - initiate model from /root/autodl-tmp/modelscope/hub/damo/nlp_corom_sentence-embedding_chinese-base
+2025-02-11 04:27:36,741 - modelscope - INFO - initiate model from location /root/autodl-tmp/modelscope/hub/damo/nlp_corom_sentence-embedding_chinese-base.
+2025-02-11 04:27:36,742 - modelscope - INFO - initialize model from /root/autodl-tmp/modelscope/hub/damo/nlp_corom_sentence-embedding_chinese-base
+2025-02-11 04:27:37,558 - modelscope - WARNING - No preprocessor field found in cfg.
+2025-02-11 04:27:37,558 - modelscope - WARNING - No val key and type key found in preprocessor domain of configuration.json file.
+2025-02-11 04:27:37,558 - modelscope - WARNING - Cannot find available config to build preprocessor at mode inference, current config: {'model_dir': '/root/autodl-tmp/modelscope/hub/damo/nlp_corom_sentence-embedding_chinese-base'}. trying to build by task and model information.
+2025-02-11 04:27:37,696 - modelscope - WARNING - No preprocessor field found in cfg.
+2025-02-11 04:27:37,697 - modelscope - WARNING - No val key and type key found in preprocessor domain of configuration.json file.
+2025-02-11 04:27:37,697 - modelscope - WARNING - Cannot find available config to build preprocessor at mode inference, current config: {'model_dir': '/root/autodl-tmp/modelscope/hub/damo/nlp_corom_sentence-embedding_chinese-base', 'sequence_length': 128}. trying to build by task and model information.
+/root/miniconda3/lib/python3.12/site-packages/transformers/modeling_utils.py:1044: FutureWarning: The `device` argument is deprecated and will be removed in v5 of Transformers.
+  warnings.warn(
+Downloading Model to directory: /root/autodl-tmp/modelscope/damo/nlp_corom_sentence-embedding_chinese-base
+Loading documents...
+Splitting text...
+Created 531 chunks
+Creating vector store...
+Vector store created successfully!
+ * Serving Flask app 'app'
+ * Debug mode: on
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:6006
+ * Running on http://172.17.0.5:6006
+[33mPress CTRL+C to quit[0m
+ * Restarting with stat
+2025-02-11 04:27:45,287 - modelscope - WARNING - Model revision not specified, use revision: v1.1.0
+2025-02-11 04:27:46,085 - modelscope - WARNING - Model revision not specified, use revision: v1.1.0
+2025-02-11 04:27:46,338 - modelscope - INFO - initiate model from /root/autodl-tmp/modelscope/hub/damo/nlp_corom_sentence-embedding_chinese-base
+2025-02-11 04:27:46,338 - modelscope - INFO - initiate model from location /root/autodl-tmp/modelscope/hub/damo/nlp_corom_sentence-embedding_chinese-base.
+2025-02-11 04:27:46,340 - modelscope - INFO - initialize model from /root/autodl-tmp/modelscope/hub/damo/nlp_corom_sentence-embedding_chinese-base
+2025-02-11 04:27:47,092 - modelscope - WARNING - No preprocessor field found in cfg.
+2025-02-11 04:27:47,092 - modelscope - WARNING - No val key and type key found in preprocessor domain of configuration.json file.
+2025-02-11 04:27:47,092 - modelscope - WARNING - Cannot find available config to build preprocessor at mode inference, current config: {'model_dir': '/root/autodl-tmp/modelscope/hub/damo/nlp_corom_sentence-embedding_chinese-base'}. trying to build by task and model information.
+2025-02-11 04:27:47,162 - modelscope - WARNING - No preprocessor field found in cfg.
+2025-02-11 04:27:47,162 - modelscope - WARNING - No val key and type key found in preprocessor domain of configuration.json file.
+2025-02-11 04:27:47,162 - modelscope - WARNING - Cannot find available config to build preprocessor at mode inference, current config: {'model_dir': '/root/autodl-tmp/modelscope/hub/damo/nlp_corom_sentence-embedding_chinese-base', 'sequence_length': 128}. trying to build by task and model information.
+/root/miniconda3/lib/python3.12/site-packages/transformers/modeling_utils.py:1044: FutureWarning: The `device` argument is deprecated and will be removed in v5 of Transformers.
+  warnings.warn(
+ * Debugger is active!
+ * Debugger PIN: 100-440-755

@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AscendFlow AI - 智能文档分析系统</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.1.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background-color: #f8f9fa;
+            color: #2c3e50;
+        }
+        .navbar {
+            background-color: #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,.08);
+            padding: 1rem 2rem;
+        }
+        .navbar-brand {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1a237e;
+        }
+        .navbar-brand i {
+            margin-right: 8px;
+        }
+        .main-container { 
+            padding: 2rem;
+            margin-top: 60px;
+            display: flex;
+            gap: 2rem;
+            min-height: calc(100vh - 120px);
+        }
+        .left-panel { 
+            flex: 0 0 45%;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        .right-panel { 
+            flex: 0 0 55%;
+            position: sticky;
+            top: 80px;
+            height: calc(100vh - 100px);
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0,0,0,.05);
+            padding: 1.5rem;
+        }
+        .markdown-preview {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+            background: #fff;
+            border-radius: 4px;
+            line-height: 1.6;
+        }
+        .markdown-preview h1,
+        .markdown-preview h2,
+        .markdown-preview h3 {
+            color: #2c3e50;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .markdown-preview p {
+            color: #34495e;
+            margin-bottom: 1rem;
+        }
+        .card {
+            border: none;
+            box-shadow: 0 0 20px rgba(0,0,0,.05);
+            border-radius: 8px;
+            transition: transform 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+        }
+        .card-header {
+            background-color: #fff;
+            border-bottom: 1px solid #edf2f7;
+            padding: 1rem 1.5rem;
+            font-weight: 500;
+            color: #2c3e50;
+        }
+        .result-box {
+            background: #fff;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,.05);
+        }
+        .documents-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+        }
+        .document-item {
+            padding: 0.8rem 1rem;
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+            background: #f8f9fa;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+        }
+        .document-item:hover {
+            background: #e9ecef;
+        }
+        .document-item i {
+            margin-right: 8px;
+            color: #1a237e;
+        }
+        .progress {
+            display: none;
+            margin-top: 1rem;
+            height: 0.5rem;
+            border-radius: 1rem;
+            background-color: #e9ecef;
+        }
+        .progress-bar {
+            background-color: #1a237e;
+            border-radius: 1rem;
+        }
+        #estimatedTime {
+            margin-top: 0.8rem;
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        .btn-primary {
+            background-color: #1a237e;
+            border-color: #1a237e;
+            padding: 0.5rem 1.5rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn-primary:hover {
+            background-color: #0d47a1;
+            border-color: #0d47a1;
+            transform: translateY(-1px);
+        }
+        .form-control {
+            border: 1px solid #e9ecef;
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+        }
+        .form-control:focus {
+            border-color: #1a237e;
+            box-shadow: 0 0 0 0.2rem rgba(26,35,126,.25);
+        }
+        .alert {
+            border: none;
+            border-radius: 6px;
+            padding: 1rem 1.5rem;
+        }
+        .footer {
+            text-align: center;
+            padding: 1.5rem;
+            color: #6c757d;
+            background: #fff;
+            border-top: 1px solid #edf2f7;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-stream"></i>
+                AscendFlow AI
+            </a>
+        </div>
+    </nav>
+
+    <div class="main-container">
+        <div class="left-panel">
+        
+        <!-- 文档列表 -->
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-file-alt me-2"></i>已处理的文档
+            </div>
+            <div class="card-body">
+                <div class="documents-list" id="documentsList">
+                    {% for doc in documents %}
+                    <div class="document-item">
+                        <i class="fas fa-file-pdf"></i>
+                        {{ doc }}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- 文件上传部分 -->
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-cloud-upload-alt me-2"></i>上传PDF文件
+            </div>
+            <div class="card-body">
+                <form id="uploadForm">
+                    <div class="mb-3">
+                        <input type="file" class="form-control" id="pdfFile" accept=".pdf" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">上传并处理</button>
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <div id="estimatedTime"></div>
+                </form>
+                <div id="uploadStatus" class="mt-3"></div>
+            </div>
+        </div>
+
+        <!-- 查询部分 -->
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-search me-2"></i>查询文档
+            </div>
+            <div class="card-body">
+                <form id="queryForm">
+                    <div class="mb-3">
+                        <input type="text" class="form-control" id="question" placeholder="输入您的问题" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">查询</button>
+                </form>
+                <div id="results" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+        
+    <div class="right-panel">
+        <h3 class="mb-3">
+            <i class="fas fa-book-reader me-2"></i>文档预览
+        </h3>
+        <div id="markdownPreview" class="markdown-preview">
+            <p class="text-muted">选择文档或上传新文档以查看内容</p>
+        </div>
+    </div>
+</div>
+
+    <footer class="footer">
+        <p class="mb-0">© 2025 AscendFlow AI. 智能文档分析与处理系统 | Powered by 香港科技大学 林泽腾</p>
+    </footer>
+
+    <!-- 添加 markdown-it 用于渲染markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it@12/dist/markdown-it.min.js"></script>
+    <script>
+        const md = window.markdownit();
+        
+        // 加载markdown文件内容
+        async function loadMarkdownContent(filename) {
+            try {
+                const response = await fetch(`/markdown/${encodeURIComponent(filename)}`);
+                const data = await response.json();
+                if (response.ok) {
+                    const markdownPreview = document.getElementById('markdownPreview');
+                    markdownPreview.innerHTML = md.render(data.content);
+                } else {
+                    console.error('Error loading markdown:', data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+        // 更新文档列表
+        function updateDocumentsList(documents) {
+            const listDiv = document.querySelector('.documents-list');
+            listDiv.innerHTML = documents.map(doc => 
+                `<div class="document-item" onclick="loadMarkdownContent('${doc}')">
+                    <i class="fas fa-file-pdf"></i>${doc}
+                </div>`
+            ).join('');
+        }
+
+        // 文件上传处理
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            const fileInput = document.getElementById('pdfFile');
+            const statusDiv = document.getElementById('uploadStatus');
+            const progressBar = document.querySelector('.progress');
+            const progressBarInner = document.querySelector('.progress-bar');
+            const estimatedTimeDiv = document.getElementById('estimatedTime');
+            
+            if (!fileInput.files[0]) {
+                statusDiv.innerHTML = '<div class="alert alert-danger">请选择文件</div>';
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const fileSizeMB = file.size / (1024 * 1024);
+            const estimatedSeconds = fileSizeMB * 30;
+            
+            formData.append('file', file);
+            
+            // 显示进度条和开始处理消息
+            progressBar.style.display = 'flex';
+            progressBarInner.style.width = '0%';
+            statusDiv.innerHTML = '<div class="alert alert-info">正在处理文件,请稍候...</div>';
+            
+            // 启动进度条动画
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += (100 / (estimatedSeconds * 2));
+                if (progress >= 90) {
+                    clearInterval(interval);
+                } else {
+                    progressBarInner.style.width = `${progress}%`;
+                }
+            }, 500);
+            
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // 更新文档列表和显示新文档内容
+                    updateDocumentsList(data.documents);
+                    if (data.markdown_content) {
+                        const markdownPreview = document.getElementById('markdownPreview');
+                        markdownPreview.innerHTML = md.render(data.markdown_content);
+                    }
+                    
+                    // 完成进度条
+                    clearInterval(interval);
+                    progressBarInner.style.width = '100%';
+                    
+                    // 显示成功消息
+                    statusDiv.innerHTML = '<div class="alert alert-success">文件处理成功!</div>';
+                    
+                    // 重置表单和进度条
+                    setTimeout(() => {
+                        progressBar.style.display = 'none';
+                        progressBarInner.style.width = '0%';
+                        estimatedTimeDiv.textContent = '';
+                        document.getElementById('uploadForm').reset();
+                    }, 2000);
+                } else {
+                    clearInterval(interval);
+                    statusDiv.innerHTML = `<div class="alert alert-danger">错误:${data.error}</div>`;
+                    progressBar.style.display = 'none';
+                }
+            } catch (error) {
+                clearInterval(interval);
+                statusDiv.innerHTML = '<div class="alert alert-danger">上传过程中发生错误</div>';
+                progressBar.style.display = 'none';
+            }
+        });
+
+        // 在文件选择时显示预估时间
+        document.getElementById('pdfFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const fileSizeMB = file.size / (1024 * 1024);
+                const estimatedSeconds = fileSizeMB * 30; // 每MB预估30秒
+                const estimatedMinutes = Math.ceil(estimatedSeconds / 60);
+                document.getElementById('estimatedTime').textContent = 
+                    `预计处理时间: 约${estimatedMinutes}分钟`;
+            } else {
+                document.getElementById('estimatedTime').textContent = '';
+            }
+        });
+
+        // 查询处理
+        document.getElementById('queryForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const question = document.getElementById('question').value;
+            const resultsDiv = document.getElementById('results');
+            
+            resultsDiv.innerHTML = '<div class="alert alert-info">正在查询,请稍候...</div>';
+            
+            try {
+                const response = await fetch('/query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ question })
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultsDiv.innerHTML = data.results.map((result, index) => `
+                        <div class="result-box">
+                            <h5>结果 ${index + 1}</h5>
+                            <p>${result.content}</p>
+                        </div>
+                    `).join('');
+                } else {
+                    resultsDiv.innerHTML = `<div class="alert alert-danger">错误:${data.error}</div>`;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = '<div class="alert alert-danger">查询过程中发生错误</div>';
+            }
+        });
+
+        // 初始加载时获取文档列表
+        fetch('/documents')
+            .then(response => response.json())
+            .then(data => {
+                if (data.documents) {
+                    updateDocumentsList(data.documents);
+                }
+            })
+            .catch(error => console.error('Error fetching documents:', error));
+    </script>
+</body>
+</html>
