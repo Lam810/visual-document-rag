@@ -1,13 +1,18 @@
-flask==2.0.1
-langchain==0.1.0
-chromadb==0.4.18
-sentence-transformers==2.2.2
-modelscope==1.9.5
-pymupdf==1.23.7
-python-dotenv==0.19.2
-requests==2.31.0
-numpy==1.24.3
-pandas==2.0.3
-tqdm==4.65.0
-pyyaml==6.0.1
-pdf-extract-kit @ git+https://github.com/modelscope/pdf-extract-kit.git
+# Core application. Install the accelerator stack separately:
+#   Ascend NPU -> requirements-npu.txt
+#   NVIDIA GPU -> a CUDA build of torch from https://pytorch.org
+flask>=3.0,<4.0
+werkzeug>=3.0,<4.0
+
+# LangChain is used only for text splitting, the Chroma wrapper and the
+# Embeddings interface, so the split packages are pinned rather than the meta
+# package.
+langchain-core>=0.3,<0.4
+langchain-community>=0.3,<0.4
+langchain-text-splitters>=0.3,<0.4
+chromadb>=0.5,<0.7
+
+modelscope>=1.15
+pyyaml>=6.0
+numpy>=1.24,<2.0
+tqdm>=4.65

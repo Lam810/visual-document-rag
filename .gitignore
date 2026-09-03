@@ -44,3 +44,8 @@ modelscope/
 # System
 .DS_Store
 Thumbs.db
+
+# Runtime artifacts
+.model_cache/
+.pdf2markdown.runtime.yaml
+PDF-Extract-Kit/

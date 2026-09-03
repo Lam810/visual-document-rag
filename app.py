@@ -1,126 +1,162 @@
-from flask import Flask, request, render_template, jsonify
-import os
+"""Flask front-end: upload a PDF, watch it become Markdown, ask questions of it."""
+
+from __future__ import annotations
+
+import logging
 import shutil
-import subprocess
+from pathlib import Path
+
+from flask import Flask, jsonify, render_template, request
+from werkzeug.utils import secure_filename
+
+import config
+import device as device_mod
+import pipeline
 from rag import RAGSystem
 
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logger = logging.getLogger(__name__)
+
+config.ensure_directories()
+config.apply_model_cache_env()
+DEVICE = device_mod.bootstrap()
+
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = config.MAX_UPLOAD_MB * 1024 * 1024
+
 rag_system = RAGSystem()
 
-# 确保必要的目录存在
-os.makedirs('input', exist_ok=True)
-os.makedirs('output', exist_ok=True)
-os.makedirs('data', exist_ok=True)
 
-@app.route('/')
+def _markdown_names() -> list[str]:
+    return sorted(p.name for p in config.DATA_DIR.glob("*.md"))
+
+
+def _resolve_in_data_dir(filename: str) -> Path | None:
+    """Resolve ``filename`` inside the data directory, or ``None`` if it escapes.
+
+    Rejects traversal (``../``), absolute paths and symlinks pointing outside,
+    all of which the previous ``os.path.join`` version happily followed.
+    """
+    candidate = (config.DATA_DIR / filename).resolve()
+    try:
+        candidate.relative_to(config.DATA_DIR.resolve())
+    except ValueError:
+        return None
+    if candidate.suffix != ".md" or not candidate.is_file():
+        return None
+    return candidate
+
+
+@app.route("/")
 def index():
-    # 获取data目录下的所有markdown文件
-    md_files = []
-    for filename in os.listdir('data'):
-        if filename.endswith('.md'):
-            md_files.append(filename)
-    return render_template('index.html', documents=md_files)
+    return render_template("index.html", documents=_markdown_names())
 
-@app.route('/upload', methods=['POST'])
+
+@app.route("/upload", methods=["POST"])
 def upload_file():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-    
-    if not file.filename.endswith('.pdf'):
-        return jsonify({'error': 'Only PDF files are allowed'}), 400
+    if "file" not in request.files:
+        return jsonify({"error": "No file part"}), 400
 
-    # 计算预估时间(基于文件大小)
-    file_size = len(file.read())
-    file.seek(0)  # 重置文件指针
-    # 假设每MB需要30秒处理时间
-    estimated_time = (file_size / (1024 * 1024)) * 30  
+    uploaded = request.files["file"]
+    if not uploaded.filename:
+        return jsonify({"error": "No selected file"}), 400
+    if not uploaded.filename.lower().endswith(".pdf"):
+        return jsonify({"error": "Only PDF files are allowed"}), 400
 
-    # 保存上传的文件
-    input_path = os.path.join('input', file.filename)
-    file.save(input_path)
-    
+    # secure_filename strips directory components, so an upload named
+    # "../../etc/passwd.pdf" cannot write outside the input directory.
+    safe_name = secure_filename(uploaded.filename)
+    if not safe_name.lower().endswith(".pdf"):
+        return jsonify({"error": "Invalid file name"}), 400
+
+    # Size from the stream position rather than reading the file into memory.
+    uploaded.stream.seek(0, 2)
+    file_size = uploaded.stream.tell()
+    uploaded.stream.seek(0)
+    estimated_time = (file_size / (1024 * 1024)) * config.SECONDS_PER_MB
+
+    input_path = config.INPUT_DIR / safe_name
+    uploaded.save(input_path)
+
+    stem = Path(safe_name).stem
     try:
-        # 运行PDF处理脚本
-        subprocess.run([
-            'python', 
-            './PDF-Extract-Kit/project/pdf2markdown/scripts/run_project.py',
-            '--config', 
-            './pdf2markdown.yaml'
-        ], check=True)
-        
-        # 移动生成的markdown文件到data目录
-        output_md = os.path.join('output', os.path.splitext(file.filename)[0] + '.md')
-        if os.path.exists(output_md):
-            shutil.move(output_md, os.path.join('data', os.path.basename(output_md)))
-            
-            # 重新初始化RAG系统以包含新文件
-            global rag_system
-            rag_system = RAGSystem()
-            rag_system.process_documents()
-            
-            # 获取更新后的文件列表和新文档的markdown内容
-            md_files = [f for f in os.listdir('data') if f.endswith('.md')]
-            
-            # 读取新生成的markdown文件内容
-            new_md_path = os.path.join('data', os.path.splitext(file.filename)[0] + '.md')
-            markdown_content = ''
-            if os.path.exists(new_md_path):
-                with open(new_md_path, 'r', encoding='utf-8') as f:
-                    markdown_content = f.read()
-            
-            return jsonify({
-                'message': 'File processed successfully',
-                'documents': md_files,
-                'estimated_time': estimated_time,
-                'markdown_content': markdown_content
-            })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        pipeline.run(DEVICE, document=input_path)
+    except FileNotFoundError as exc:
+        return jsonify({"error": str(exc)}), 500
+    except Exception as exc:
+        logger.exception("PDF extraction failed")
+        stderr = getattr(exc, "stderr", None)
+        return jsonify({"error": f"PDF extraction failed: {stderr or exc}"}), 500
 
-@app.route('/documents', methods=['GET'])
-def get_documents():
-    try:
-        md_files = [f for f in os.listdir('data') if f.endswith('.md')]
-        return jsonify({'documents': md_files})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    produced = config.OUTPUT_DIR / f"{stem}.md"
+    if not produced.exists():
+        return jsonify({"error": "Extraction produced no Markdown output"}), 500
 
-@app.route('/query', methods=['POST'])
-def query():
-    data = request.get_json()
-    if not data or 'question' not in data:
-        return jsonify({'error': 'No question provided'}), 400
-    
-    try:
-        results = rag_system.search(data['question'])
-        return jsonify({
-            'results': [
-                {'content': doc.page_content}
-                for doc in results
-            ]
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    destination = config.DATA_DIR / produced.name
+    shutil.move(str(produced), str(destination))
 
-@app.route('/markdown/<filename>')
-def get_markdown(filename):
-    try:
-        file_path = os.path.join('data', filename)
-        if not os.path.exists(file_path):
-            return jsonify({'error': 'File not found'}), 404
-            
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        return jsonify({'content': content})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-if __name__ == '__main__':
-    # 初始化RAG系统
+    global rag_system
+    rag_system = RAGSystem()
     rag_system.process_documents()
-    # 在6006端口运行
-    app.run(host='0.0.0.0', port=6006, debug=True)
+
+    return jsonify(
+        {
+            "message": "File processed successfully",
+            "documents": _markdown_names(),
+            "estimated_time": estimated_time,
+            "markdown_content": destination.read_text(encoding="utf-8"),
+        }
+    )
+
+
+@app.route("/documents", methods=["GET"])
+def get_documents():
+    return jsonify({"documents": _markdown_names()})
+
+
+@app.route("/query", methods=["POST"])
+def query():
+    data = request.get_json(silent=True)
+    if not data or "question" not in data:
+        return jsonify({"error": "No question provided"}), 400
+    try:
+        results = rag_system.search(data["question"])
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 409
+    except Exception as exc:
+        logger.exception("Query failed")
+        return jsonify({"error": str(exc)}), 500
+    return jsonify({"results": [{"content": doc.page_content} for doc in results]})
+
+
+@app.route("/markdown/<path:filename>")
+def get_markdown(filename):
+    resolved = _resolve_in_data_dir(filename)
+    if resolved is None:
+        return jsonify({"error": "File not found"}), 404
+    return jsonify({"content": resolved.read_text(encoding="utf-8")})
+
+
+@app.route("/health")
+def health():
+    return jsonify(
+        {
+            "status": "ok",
+            "device": DEVICE.describe(),
+            "backend": DEVICE.backend,
+            "documents": len(_markdown_names()),
+        }
+    )
+
+
+def main() -> None:
+    print(f"Device: {DEVICE.describe()}")
+    rag_system.process_documents()
+    # Binds to localhost by default; set VDR_HOST=0.0.0.0 to expose it, and note
+    # that VDR_DEBUG=1 enables the Werkzeug debugger, which executes code from
+    # any client that can reach the port.
+    app.run(host=config.HOST, port=config.PORT, debug=config.DEBUG)
+
+
+if __name__ == "__main__":
+    main()

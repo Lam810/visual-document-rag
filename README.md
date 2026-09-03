@@ -1,128 +1,227 @@
-# AscendFlow AI - 智能文档分析系统
+<div align="center">
 
-一个基于人工智能的PDF文档分析系统,支持文档上传、解析、查询等功能。通过先进的PDF解析技术和RAG检索增强生成技术,实现文档的智能化管理和查询。
+# Visual Document RAG
 
-## 背景
+**RAG that keeps reading a PDF's layout, not just its words.**
+Formulas, tables, and figures survive the pipeline as themselves — not as flattened text.
 
-- 视觉丰富文档（VRDs）结合了复杂信息，将文本与图形、图表和表格等视觉元素融合在一起，现有大模型很难完全读取。
-- 与传统的文本文档不同，VRDs有两个主要特征：与排版细节（例如字体、大小、样式、颜色）相关联的文本，以空间方式组织信息的布局，以及增强理解所需的视觉元素，如图表和图形。
-- 因此，我提供了这个项目，使用多个大模型协同，先对复杂的pdf文档进行布局检测，然后采用不同的工具，识别公示、表格和图片，并转化成Latex或者markdown格式，交给向量模型变成RAG系统，并最终实现大模型进行理解和学习。
+[![License: MIT](https://img.shields.io/badge/License-MIT-informational.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](requirements.txt)
+[![Ascend NPU](https://img.shields.io/badge/Ascend%20NPU-in%20progress-orange.svg)](#running-on-ascend-npu)
 
-## 功能特点
+</div>
 
-- **PDF文档处理**
-  - 支持PDF文件上传和自动解析
-  - 实时显示处理进度
-  - 自动转换为Markdown格式
+---
 
-- **文档预览**
-  - 实时Markdown预览
-  - 支持文档目录导航
-  - 优雅的阅读体验
+A retrieval-augmented question-answering system for **visually rich documents** — PDFs
+where meaning lives in the layout, formulas, tables and figures rather than in a linear
+stream of text.
 
-- **智能检索**
-  - 基于RAG的智能问答
-  - 精准定位相关内容
-  - 自然语言交互
+Plain text extraction throws that structure away. This project runs a document through a
+multi-stage vision pipeline first — layout detection, formula detection, formula
+recognition, OCR — reassembles the result as structured Markdown, and only then chunks
+and embeds it for retrieval. Questions are answered against a representation that still
+knows a formula was a formula.
 
-- **文档管理**
-  - 已处理文档列表
-  - 快速切换不同文档
-  - 文档永久保存
+The pipeline is designed to run on **Huawei Ascend NPUs** as well as CUDA GPUs and CPU,
+with per-stage device resolution rather than a single global flag. See
+[Running on Ascend NPU](#running-on-ascend-npu).
 
-## 技术栈
+---
 
-- **后端**
-  - Python + Flask
-  - RAG (Retrieval-Augmented Generation)
-  - PDF-Extract-Kit
+## How it works
 
-- **前端**
-  - HTML + CSS + JavaScript
-  - Bootstrap 5
-  - Font Awesome
+```
+PDF ──► layout detection ──► formula detection ──► formula recognition ──► OCR
+        (DocLayout-YOLO)     (YOLOv8)              (UniMERNet → LaTeX)     (PaddleOCR)
+                                       │
+                                       ▼
+                          structured Markdown  ──►  chunk  ──►  embed  ──►  Chroma
+                                                                                │
+                                       question ──────────────────────────► retrieve
+```
 
-## 安装说明
+The vision stages come from [PDF-Extract-Kit](https://github.com/opendatalab/PDF-Extract-Kit).
+This project supplies the orchestration, the device abstraction, the retrieval layer and
+the web front-end.
 
-1. 克隆项目仓库
+| Module | Responsibility |
+| --- | --- |
+| [`device.py`](device.py) | Detects the accelerator and reconciles four different device dialects |
+| [`config.py`](config.py) | All paths and tunables, resolved from environment variables |
+| [`pipeline.py`](pipeline.py) | Generates the per-run PDF-Extract-Kit config and launches it |
+| [`rag.py`](rag.py) | Chunking, device-pinned embeddings, Chroma vector store |
+| [`app.py`](app.py) | Flask upload / preview / query API |
+| [`scripts/check_ascend.py`](scripts/check_ascend.py) | Per-stage NPU readiness diagnostic |
+
+---
+
+## Quick start
+
 ```bash
 git clone https://github.com/Lam810/visual-document-rag.git
 cd visual-document-rag
-```
 
-2. 安装PDF-Extract-Kit
-```bash
-# 克隆PDF-Extract-Kit仓库
+# 1. Vision models
 git clone https://github.com/opendatalab/PDF-Extract-Kit.git
-
-# 安装Git LFS并下载模型
 git lfs install
 git clone https://www.modelscope.cn/opendatalab/pdf-extract-kit-1.0.git
-
-# 移动模型文件
 mv ./pdf-extract-kit-1.0/models ./PDF-Extract-Kit
-```
 
-3. 配置Python环境
-```bash
-# 创建并激活conda环境
-conda create -n pdf-extract-kit-1.0 python=3.10
-conda activate pdf-extract-kit-1.0
-
-# 安装项目依赖
+# 2. Environment
+conda create -n visual-document-rag python=3.10
+conda activate visual-document-rag
 pip install -r requirements.txt
+
+# 3. Accelerator (pick one)
+pip install -r requirements-npu.txt              # Ascend NPU
+pip install torch --index-url https://download.pytorch.org/whl/cu121   # NVIDIA
+
+# 4. Run
+python app.py                                    # http://127.0.0.1:6006
 ```
 
-4. 运行应用
+Upload a PDF, wait for extraction, then ask questions about it.
+
+---
+
+## Running on Ascend NPU
+
+### Why this needs more than a device flag
+
+The pipeline spans three frameworks that disagree about how to name an accelerator, and
+two of the stages cannot be pointed at an NPU through configuration at all:
+
+| Stage | Framework | How it picks a device | Ascend obstacle |
+| --- | --- | --- | --- |
+| Layout detection | Ultralytics/PyTorch | `device` in config | `select_device` parses CUDA ordinals; rejects `npu:0` |
+| Formula detection | Ultralytics/PyTorch | `device` in config | same |
+| Formula recognition | PyTorch | **hardcoded** `torch.device("cuda" if torch.cuda.is_available() else "cpu")` | no override exists |
+| OCR | PaddlePaddle | `use_gpu` / `use_npu` flags | needs `paddle-custom-npu`; `use_gpu` wins the branch if left true |
+| Embeddings | ModelScope → PyTorch | `pipeline(device=...)` | `verify_device` asserts the string starts with `cpu`/`cuda`/`gpu` |
+
+Two of those — formula recognition and embeddings — will *silently* run on CPU rather
+than raise, which is the failure mode this project is built to avoid.
+
+The resolution is Ascend's official `torch_npu.contrib.transfer_to_npu` shim, which
+rewrites `torch.cuda.*` calls to `torch.npu.*` at import time. With it active, the
+hardcoded CUDA path lands on the NPU and ModelScope's `gpu:0` does too.
+[`device.py`](device.py) applies the shim, **verifies it took effect**, and then emits
+the correct device string per framework — falling back to honest `npu:` strings if the
+shim is unavailable, rather than handing out CUDA names that would point nowhere.
+
+Because the shim only affects modules imported after it,
+[`scripts/run_pdf2markdown.py`](scripts/run_pdf2markdown.py) bootstraps the device before
+delegating to PDF-Extract-Kit's entrypoint.
+
+### Install
+
 ```bash
-python app.py
+source /usr/local/Ascend/ascend-toolkit/set_env.sh
+
+# torch must be the CPU build: Ascend runs PyTorch through torch_npu, not CUDA.
+pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements-npu.txt
+
+# Optional, moves OCR onto the NPU too. Without it OCR runs on CPU.
+pip install paddlepaddle==3.0.0
+pip install paddle-custom-npu -i https://www.paddlepaddle.org.cn/packages/stable/npu/
 ```
 
-应用将在 http://localhost:6006 运行
+`torch-npu`'s version tracks `torch`'s exactly, and each release targets a specific CANN
+version — check the [matrix](https://gitee.com/ascend/pytorch#installation) before
+changing either.
 
-## 目录结构
+### Verify before running
 
-```
-.
-├── app.py              # Flask应用主文件
-├── rag.py             # RAG系统实现
-├── requirements.txt    # 项目依赖
-├── templates/         # HTML模板
-│   └── index.html    # 主页面
-├── data/             # 处理后的markdown文件存储目录
-├── input/            # 上传的PDF文件存储目录
-└── output/           # 临时输出文件目录
+```bash
+python scripts/check_ascend.py
 ```
 
-## 使用说明
+This reports each stage independently, so a CPU fallback shows up as a warning here
+rather than as an unexplained slowdown later:
 
-1. 上传PDF文件
-   - 点击"上传PDF文件"按钮选择文件
-   - 系统会显示预估处理时间
-   - 等待处理完成
+```
+  Stage                  Runs on
+  ---------------------  -------------------------
+  layout detection       cuda:0        (shim → NPU)
+  formula detection      cuda:0        (shim → NPU)
+  formula recognition    npu:0
+  OCR (PaddleOCR)        npu:0
+  embeddings             gpu:0         (shim → NPU)
+```
 
-2. 查看文档
-   - 在左侧文档列表中选择要查看的文档
-   - 右侧会显示文档的Markdown内容
-   - 可以滚动浏览全文
+### Status
 
-3. 智能查询
-   - 在查询框输入问题
-   - 系统会基于文档内容进行回答
-   - 支持自然语言提问
+Tested on a real Ascend 910B cluster (CANN 8.5.0). Driver detection, `torch`/`torch_npu`
+installation, and device metadata queries (`is_available`, `device_count`,
+`get_device_name`) all work correctly. **Actual NPU compute is currently blocked by a
+cluster-side issue**: opening the device for the first real operation
+(`torch.npu.set_device`, or any tensor's `.npu()`) hangs indefinitely, reproduced
+identically across two nodes and both `srun` and `sbatch`. This looks like a device
+isolation gap in that cluster's Slurm GRES plugin, not a bug in this project — full
+diagnostic timeline, what was ruled out, and what's still unverified as a result:
+see [`ASCEND_VERIFICATION.md`](ASCEND_VERIFICATION.md).
 
-## 开发者
+The device-selection *logic* (which device string each framework receives, under every
+backend/shim-state combination) was separately verified against stubbed `torch_npu` /
+`paddle` modules and is correct. What's unverified is inference actually running, which
+needs the cluster-side hang above resolved first.
 
-- Lam Tzar Tung
+Known gaps to expect once compute is unblocked:
 
-## 许可证
+- Ultralytics/DocLayout-YOLO device parsing is the least certain stage; if it rejects
+  `cuda:0` under the shim, set `VDR_DISABLE_CUDA_SHIM=1` and compare.
+- UniMERNet's `batch_size: 128` default is tuned for large-VRAM GPUs and will likely
+  need lowering.
+- Operators unsupported by CANN fall back to CPU per-op rather than failing loudly.
 
-MIT License
+---
 
-## 致谢
+## Configuration
 
-感谢以下开源项目的支持:
-- [PDF-Extract-Kit](https://github.com/opendatalab/PDF-Extract-Kit)
-- [Flask](https://flask.palletsprojects.com/)
-- [Bootstrap](https://getbootstrap.com/)
-- [Font Awesome](https://fontawesome.com/)
+Everything is environment-driven; no paths are baked into the source.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `VDR_DEVICE` | `auto` | `auto`, `npu`, `cuda`, `mps`, `cpu` |
+| `VDR_DEVICE_ID` | `0` | Accelerator ordinal |
+| `VDR_DISABLE_CUDA_SHIM` | unset | `1` disables the CUDA→NPU shim |
+| `VDR_PDF_EXTRACT_KIT` | `./PDF-Extract-Kit` | PDF-Extract-Kit checkout |
+| `VDR_DATA_DIR` | `./data` | Extracted Markdown |
+| `VDR_INPUT_DIR` | `./input` | Uploaded PDFs |
+| `VDR_OUTPUT_DIR` | `./output` | Pipeline scratch output |
+| `VDR_CHROMA_DIR` | `./chroma_db` | Vector store |
+| `VDR_MODEL_CACHE` | `./.model_cache` | ModelScope / HuggingFace cache |
+| `VDR_EMBEDDING_MODEL` | `damo/nlp_corom_sentence-embedding_chinese-base` | Embedding model |
+| `VDR_CHUNK_SIZE` / `VDR_CHUNK_OVERLAP` | `500` / `50` | Chunking |
+| `VDR_HOST` / `VDR_PORT` | `127.0.0.1` / `6006` | Bind address |
+| `VDR_DEBUG` | `0` | Werkzeug debugger — see below |
+| `VDR_MAX_UPLOAD_MB` | `100` | Upload size limit |
+
+On Ascend, `ASCEND_RT_VISIBLE_DEVICES` restricts which NPUs are visible; `VDR_DEVICE_ID`
+indexes into that visible set, the same way it works for CUDA.
+
+### Deployment note
+
+The server binds to `127.0.0.1` and runs with the debugger off. Setting `VDR_HOST=0.0.0.0`
+together with `VDR_DEBUG=1` exposes the Werkzeug debugger, which executes arbitrary code
+for anyone who can reach the port — do not combine them on a shared machine. There is no
+authentication layer; this is a research prototype, not a multi-tenant service.
+
+---
+
+## Acknowledgements
+
+- [PDF-Extract-Kit](https://github.com/opendatalab/PDF-Extract-Kit) — layout, formula and OCR models
+- [UniMERNet](https://github.com/opendatalab/UniMERNet) — formula recognition
+- [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) — text recognition
+- [ModelScope](https://github.com/modelscope/modelscope) — embedding models
+- [Ascend PyTorch adapter](https://gitee.com/ascend/pytorch) — `torch_npu`
+
+Not affiliated with or endorsed by Huawei. "Ascend" and "CANN" are Huawei trademarks,
+used here only to describe hardware compatibility.
+
+## License
+
+MIT

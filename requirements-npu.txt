@@ -1,0 +1,27 @@
+# Ascend NPU stack.
+#
+# Install order matters, and torch must be the CPU build: on Ascend, PyTorch
+# runs against the torch_npu plugin rather than a CUDA runtime.
+#
+#   1. source /usr/local/Ascend/ascend-toolkit/set_env.sh
+#   2. pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cpu
+#   3. pip install -r requirements-npu.txt
+#   4. python scripts/check_ascend.py
+#
+# torch-npu's version tracks torch's exactly - torch 2.7.1 needs torch-npu
+# 2.7.1. Change both lines together, and check the CANN version each release
+# requires: https://gitee.com/ascend/pytorch#installation
+torch==2.7.1
+torch-npu==2.7.1
+
+# torch-npu does not declare these, but imports them at load time. Because
+# PyTorch auto-loads the torch_npu backend extension, missing them does not
+# degrade gracefully - "import torch" itself raises RuntimeError. Verified on
+# CANN 8.5.0 / aarch64 with torch-npu 2.7.1.
+numpy<2.0
+pyyaml>=6.0
+
+# Optional: moves the PaddleOCR stage onto the NPU as well. Without it OCR
+# still runs, on CPU. The wheel must match your CANN release.
+#   pip install paddlepaddle==3.0.0
+#   pip install paddle-custom-npu -i https://www.paddlepaddle.org.cn/packages/stable/npu/
