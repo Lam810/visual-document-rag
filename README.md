@@ -7,7 +7,7 @@ Formulas, tables, and figures survive the pipeline as themselves — not as flat
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-informational.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](requirements.txt)
-[![Ascend NPU](https://img.shields.io/badge/Ascend%20NPU-in%20progress-orange.svg)](#running-on-ascend-npu)
+[![Ascend NPU](https://img.shields.io/badge/Ascend%20NPU-910C%20tested-0f6f7d.svg)](ASCEND_VERIFICATION.md)
 
 </div>
 
