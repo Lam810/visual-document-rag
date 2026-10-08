@@ -25,3 +25,7 @@ pyyaml>=6.0
 # still runs, on CPU. The wheel must match your CANN release.
 #   pip install paddlepaddle==3.0.0
 #   pip install paddle-custom-npu -i https://www.paddlepaddle.org.cn/packages/stable/npu/
+# For CANN 8.5.0 TBE compilation, the Paddle Python environment also needed
+# sympy==1.12, attrs, and psutil in the tested 910C setup. Missing them surfaced
+# as ACL 500001 at elementwise_add; see ASCEND_VERIFICATION.md.
+#   pip install sympy==1.12 attrs psutil

@@ -159,11 +159,12 @@ earlier device-open hang was traced to faulty hardware; see
 [`ASCEND_VERIFICATION.md`](ASCEND_VERIFICATION.md) for the diagnostic timeline.
 
 The device-selection *logic* was separately verified against stubbed
-`torch_npu` / `paddle` modules. A later real-hardware attempt confirmed Paddle
-NPU tensor computation, but PP-OCRv4 text detection failed at
-`elementwise_add` with ACL error 500001. **PaddleOCR inference and the full
-document pipeline are not verified on 910C.** See the
+`torch_npu` / `paddle` modules. A real-hardware PP-OCRv4 detection and
+recognition run on `npu:0` returned 10 text lines from a sample image,
+including the expected text. An earlier ACL 500001 failure was caused by
+missing Python dependencies needed by the CANN compiler; see the
 [`PaddleOCR follow-up`](ASCEND_VERIFICATION.md#paddleocr-follow-up-2026-10-08).
+**The full document pipeline remains unverified on 910C.**
 
 Known gaps in the remaining stages:
 

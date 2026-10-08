@@ -179,20 +179,28 @@ health reporting, and - since 2026-09-03 - **NPU compute itself**:
 `torch.npu.set_device()` followed by a real matmul returns a correct result.
 
 **Still unverified:** the CUDA→NPU shim's effect under real model load,
-ModelScope embedding inference, successful PaddleOCR inference, and the
-PDF-Extract-Kit pipeline end-to-end. Issue 4 no longer blocks these. The device-selection
+ModelScope embedding inference, and the PDF-Extract-Kit pipeline end-to-end.
+Issue 4 no longer blocks these. The device-selection
 logic for all of these was verified separately with stubbed `torch_npu` /
 `paddle` modules (correct device strings for every backend/shim-state
 combination), but a stub proves the *logic* is right, not that inference
-*runs* - that step is still open.
+*runs*; real model checks are still needed for the remaining stages.
 
 ### PaddleOCR follow-up (2026-10-08)
 
-An independent PP-OCRv4 inference attempt on Ascend 910C confirmed that Paddle
-detects the NPU and executes a real matrix multiplication on `npu:0`. OCR text
-detection failed inside `predictor.run()` with ACL error `500001` at the
-`elementwise_add` operator, before returning any recognized text. Repeating the
-attempt with `FLAGS_npu_blocking_run=true` and
-`FLAGS_npu_check_nan_inf=false` produced the same error. This does not verify
-PaddleOCR inference or the full document pipeline. The cause of the operator
-failure has not been established.
+An initial PP-OCRv4 inference attempt on Ascend 910C confirmed real Paddle
+tensor computation on `npu:0`, but text detection failed with ACL error
+`500001` reported at `elementwise_add`. Enabling synchronous execution did not
+resolve it. CANN's lower-level logs showed that its Python-based TBE compiler
+could not import `sympy`; after installing it, the next run reported missing
+`attr`, and a direct TBE import then reported missing `psutil`. Installing
+`sympy==1.12`, `attrs`, and `psutil` into the **same Python environment as
+Paddle** made TBE import successfully. The error at `elementwise_add` was a
+symptom of compiler initialization failure, not evidence that the add kernel
+itself was broken.
+
+With those dependencies present, `scripts/probe_paddle_npu_add.py` returned
+the expected value on `npu:0`. A subsequent real PP-OCRv4 detection and
+recognition run on `npu:0` completed and returned 10 text lines containing the
+expected text from the sample image. This verifies **PaddleOCR inference** on
+this tested stack, but not the complete document pipeline.
