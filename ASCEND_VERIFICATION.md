@@ -179,10 +179,20 @@ health reporting, and - since 2026-09-03 - **NPU compute itself**:
 `torch.npu.set_device()` followed by a real matmul returns a correct result.
 
 **Still unverified:** the CUDA→NPU shim's effect under real model load,
-ModelScope embedding inference, PaddleOCR inference, and the PDF-Extract-Kit
-pipeline end-to-end. Issue 4 no longer blocks these - they simply have not been
-run yet. The device-selection
+ModelScope embedding inference, successful PaddleOCR inference, and the
+PDF-Extract-Kit pipeline end-to-end. Issue 4 no longer blocks these. The device-selection
 logic for all of these was verified separately with stubbed `torch_npu` /
 `paddle` modules (correct device strings for every backend/shim-state
 combination), but a stub proves the *logic* is right, not that inference
 *runs* - that step is still open.
+
+### PaddleOCR follow-up (2026-10-08)
+
+An independent PP-OCRv4 inference attempt on Ascend 910C confirmed that Paddle
+detects the NPU and executes a real matrix multiplication on `npu:0`. OCR text
+detection failed inside `predictor.run()` with ACL error `500001` at the
+`elementwise_add` operator, before returning any recognized text. Repeating the
+attempt with `FLAGS_npu_blocking_run=true` and
+`FLAGS_npu_check_nan_inf=false` produced the same error. This does not verify
+PaddleOCR inference or the full document pipeline. The cause of the operator
+failure has not been established.

@@ -153,22 +153,19 @@ rather than as an unexplained slowdown later:
 
 ### Status
 
-Tested on a real Ascend 910B cluster (CANN 8.5.0). Driver detection, `torch`/`torch_npu`
-installation, and device metadata queries (`is_available`, `device_count`,
-`get_device_name`) all work correctly. **Actual NPU compute is currently blocked by a
-cluster-side issue**: opening the device for the first real operation
-(`torch.npu.set_device`, or any tensor's `.npu()`) hangs indefinitely, reproduced
-identically across two nodes and both `srun` and `sbatch`. This looks like a device
-isolation gap in that cluster's Slurm GRES plugin, not a bug in this project — full
-diagnostic timeline, what was ruled out, and what's still unverified as a result:
-see [`ASCEND_VERIFICATION.md`](ASCEND_VERIFICATION.md).
+On Ascend 910C hardware, driver detection, `torch`/`torch_npu` installation,
+device metadata queries, and NPU matrix multiplication have been verified. An
+earlier device-open hang was traced to faulty hardware; see
+[`ASCEND_VERIFICATION.md`](ASCEND_VERIFICATION.md) for the diagnostic timeline.
 
-The device-selection *logic* (which device string each framework receives, under every
-backend/shim-state combination) was separately verified against stubbed `torch_npu` /
-`paddle` modules and is correct. What's unverified is inference actually running, which
-needs the cluster-side hang above resolved first.
+The device-selection *logic* was separately verified against stubbed
+`torch_npu` / `paddle` modules. A later real-hardware attempt confirmed Paddle
+NPU tensor computation, but PP-OCRv4 text detection failed at
+`elementwise_add` with ACL error 500001. **PaddleOCR inference and the full
+document pipeline are not verified on 910C.** See the
+[`PaddleOCR follow-up`](ASCEND_VERIFICATION.md#paddleocr-follow-up-2026-10-08).
 
-Known gaps to expect once compute is unblocked:
+Known gaps in the remaining stages:
 
 - Ultralytics/DocLayout-YOLO device parsing is the least certain stage; if it rejects
   `cuda:0` under the shim, set `VDR_DISABLE_CUDA_SHIM=1` and compare.
